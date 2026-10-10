@@ -26,6 +26,7 @@ local IconButton = require("ui/widget/iconbutton")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
 local LeftContainer = require("ui/widget/container/leftcontainer")
+local LineWidget = require("ui/widget/linewidget")
 local Notification = require("ui/widget/notification")
 local NetworkMgr = require("ui/network/manager")
 local OverlapGroup = require("ui/widget/overlapgroup")
@@ -35,6 +36,7 @@ local TextWidget = require("ui/widget/textwidget")
 local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
+local Blitbuffer = require("ffi/blitbuffer")
 local logger = require("logger")
 local util = require("util")
 local Screen = Device.screen
@@ -71,7 +73,9 @@ function LibraryScreen:init()
         sort = self.plugin.sort.field,
         order = self.plugin.sort.order,
         title = self.plugin.server.library_name or _("Library"),
+        tab = "all",
     }
+    self.browse_cache = {}
     self.page = 1
     self.turns = 0
     self.selecting = false
@@ -133,7 +137,52 @@ function LibraryScreen:subtitle()
         .. (self.query.order == "desc" and " ↓" or " ↑")
 end
 
+local TABS = {
+    { id = "all", label = _("All") },
+    { id = "recent", label = _("Recent") },
+    { id = "authors", label = _("Authors") },
+    { id = "series", label = _("Series") },
+    { id = "tags", label = _("Tags") },
+}
+
+function LibraryScreen:buildTabs()
+    local S = Common.S
+    local inner = self.dimen.w - 2 * S.margin
+    local tab_w = math.floor(inner / #TABS)
+    local row = HorizontalGroup:new{ HorizontalSpan:new{ width = S.margin } }
+    for _i, tab in ipairs(TABS) do
+        local active = self.query.tab == tab.id
+        table.insert(row, VerticalGroup:new{
+            Button:new{
+                text = tab.label,
+                width = tab_w,
+                bordersize = 0,
+                text_font_size = 19,
+                text_font_bold = active,
+                padding_v = math.floor(S.gap / 2),
+                callback = function() self:onTab(tab.id) end,
+                show_parent = self,
+            },
+            LineWidget:new{
+                dimen = Geom:new{ w = tab_w, h = active and Screen:scaleBySize(3) or S.line },
+                background = active and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_LIGHT_GRAY,
+            },
+        })
+    end
+    return row
+end
+
 function LibraryScreen:buildHeader()
+    local top = self:buildTitleBar()
+    local tabs = self:buildTabs()
+    if self.selecting then
+        -- Same height as normal mode so the grid does not move.
+        tabs = VerticalSpan:new{ width = tabs:getSize().h }
+    end
+    return VerticalGroup:new{ align = "left", top, tabs }
+end
+
+function LibraryScreen:buildTitleBar()
     if self.selecting then
         return Common.header{
             width = self.dimen.w,
@@ -424,6 +473,7 @@ function LibraryScreen:goToPage(page)
 end
 
 function LibraryScreen:refresh()
+    self.browse_cache = {}
     self.cover_gen = (self.cover_gen or 0) + 1
     self:resetData()
     self.page = 1
@@ -747,6 +797,50 @@ function LibraryScreen:applyQuery(changes)
     end)
 end
 
+function LibraryScreen:defaultTitle()
+    return self.plugin.server.library_name or _("Library")
+end
+
+function LibraryScreen:onTab(id)
+    if id == "all" then
+        self:applyQuery{ search = "", sort = self.plugin.sort.field, order = self.plugin.sort.order,
+            title = self:defaultTitle(), tab = "all" }
+    elseif id == "recent" then
+        self:applyQuery{ search = "", sort = "timestamp", order = "desc", title = _("Recently added"), tab = "recent" }
+    else
+        self:showBrowse(id)
+    end
+end
+
+local BROWSE_TITLES = { authors = _("Authors"), series = _("Series"), tags = _("Tags") }
+
+function LibraryScreen:showBrowse(field)
+    local function show(items)
+        local BrowseScreen = csrequire("screens/browse")
+        UIManager:show(BrowseScreen:new{
+            title = BROWSE_TITLES[field],
+            items = items,
+            on_select = function(item)
+                self:applyQuery{ search = item.search, title = item.name, tab = field }
+            end,
+        })
+    end
+    if self.browse_cache[field] then return show(self.browse_cache[field]) end
+    NetworkMgr:runWhenOnline(function()
+        local info = InfoMessage:new{ text = _("Loading…") }
+        UIManager:show(info)
+        UIManager:forceRePaint()
+        local items, err = self.client:browseField(field)
+        UIManager:close(info)
+        if not items then
+            UIManager:show(InfoMessage:new{ text = err.message })
+            return
+        end
+        self.browse_cache[field] = items
+        show(items)
+    end)
+end
+
 function LibraryScreen:showSearch()
     local dialog
     dialog = InputDialog:new{
@@ -761,7 +855,8 @@ function LibraryScreen:showSearch()
                 UIManager:close(dialog)
                 self:applyQuery{
                     search = text,
-                    title = text ~= "" and text or self.plugin.server.library_name or _("Library"),
+                    title = text ~= "" and text or self:defaultTitle(),
+                    tab = text ~= "" and "search" or "all",
                 }
             end },
         }},
@@ -812,7 +907,7 @@ function LibraryScreen:showMenu()
     if self.query.search ~= "" then
         table.insert(buttons, 1, {{ text = _("Show all books"), callback = function()
             UIManager:close(dialog)
-            self:applyQuery{ search = "", title = self.plugin.server.library_name or _("Library") }
+            self:applyQuery{ search = "", title = self:defaultTitle(), tab = "all" }
         end }})
     end
     local pending = self.plugin.downloader:pending()
