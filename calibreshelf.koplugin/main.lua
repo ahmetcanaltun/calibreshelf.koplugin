@@ -34,6 +34,7 @@ local _ = require("gettext")
 local Calibre = csrequire("api/calibre")
 local Downloader = csrequire("lib/downloader")
 local Downloads = csrequire("lib/downloads")
+local ZenHome = csrequire("widgets/zenhome")
 
 local DEFAULT_FORMATS = { "EPUB", "AZW3", "MOBI", "PDF" }
 
@@ -49,6 +50,16 @@ function CalibreShelf:init()
     self.downloader = Downloader:new(self.downloads)
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
+    -- ZenOS may load before or after us; ZenOSReady covers the second case.
+    if ZenHome.register(self) then
+        ZenHome.scheduleRefresh(self)
+    end
+end
+
+function CalibreShelf:onZenOSReady()
+    if ZenHome.register(self) then
+        ZenHome.scheduleRefresh(self)
+    end
 end
 
 function CalibreShelf:loadSettings()

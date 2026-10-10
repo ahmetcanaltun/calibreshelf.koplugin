@@ -425,6 +425,22 @@ function LibraryScreen:loadCached()
     return true
 end
 
+-- Newest-first listings double as the ZenOS Home widget's data source.
+function LibraryScreen:updateHome()
+    local q = self.query
+    if q.search ~= "" or q.sort ~= "timestamp" or q.order ~= "desc" then return end
+    local ZenHome = csrequire("widgets/zenhome")
+    local state = self.plugin.settings:readSetting("home") or {}
+    local same = state.total == self.total and state.recent and #state.recent > 0
+    for i, r in ipairs(state.recent or {}) do
+        if self.ids[i] ~= r.id then same = false end
+    end
+    if same then return end
+    local books = {}
+    for i = 1, math.min(#self.ids, ZenHome.MAX_COVERS) do table.insert(books, self.books[self.ids[i]]) end
+    ZenHome.update(self.plugin, self.total, books, function(book) return self:thumbPath(book) end)
+end
+
 function LibraryScreen:saveCatalog()
     local ok, err = pcall(Store.saveCatalog, self.server_key, self.library_id, {
         query = self.query, total = self.total, ids = self.ids, books = self.books,
@@ -483,6 +499,7 @@ function LibraryScreen:ensureLoaded(page, callback)
         end
         self.initial_load = false
         self:saveCatalog()
+        self:updateHome()
         callback(true)
     end)
 end
