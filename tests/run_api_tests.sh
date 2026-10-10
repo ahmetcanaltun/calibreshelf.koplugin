@@ -60,7 +60,13 @@ run_mode() {
   stop_server
 }
 
+# A plain web server stands in for e.g. Apache sharing calibre's port.
+python3 -m http.server 8099 --bind 127.0.0.1 --directory "$WORK/src" >/dev/null 2>&1 &
+FOREIGN_PID=$!
+export CS_FOREIGN_URL="http://127.0.0.1:8099"
 run_mode open "$WORK/lib1" "$WORK/lib2"
+kill "$FOREIGN_PID" 2>/dev/null || true
+unset CS_FOREIGN_URL
 run_mode basic --enable-auth --auth-mode basic --userdb "$WORK/users.sqlite" "$WORK/lib1"
 run_mode digest --enable-auth --userdb "$WORK/users.sqlite" "$WORK/lib1"
 exit $status

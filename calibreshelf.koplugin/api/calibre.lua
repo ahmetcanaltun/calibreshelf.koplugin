@@ -13,6 +13,7 @@ local socketutil = require("socketutil")
 local url = require("socket.url")
 local util = require("util")
 local _ = require("gettext")
+local T = require("ffi/util").template
 
 local Calibre = {}
 Calibre.__index = Calibre
@@ -32,6 +33,7 @@ Calibre.ERR = {
     HTTP = "http",
     DISK = "disk",
     CANCELLED = "cancelled",
+    NOT_CALIBRE = "not_calibre",
 }
 local ERR = Calibre.ERR
 
@@ -188,6 +190,14 @@ function Calibre:_httpError(code, headers, status, body, context)
         return makeError(classifySocketError(code), detail)
     end
     body = body or ""
+    -- calibre always sends "Server: calibre <version>". Anything else means
+    -- another program answered, e.g. a web server sharing the port.
+    local server = headers and headers["server"]
+    if server and not server:lower():find("^calibre") then
+        return makeError(ERR.NOT_CALIBRE, detail .. " server=" .. server,
+            T(_("Another program (%1) answered at this address, not Calibre.\n\nCheck the port shown in Calibre under Preferences > Sharing over the net, or pick a different one there."),
+                server:match("^[^/%s]+") or server))
+    end
     if code == 401 then
         local challenge = headers and headers["www-authenticate"] or ""
         if challenge:lower():match("^%s*digest") then

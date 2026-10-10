@@ -149,6 +149,13 @@ if mode == "open" then
     local _, ue = down:libraryInfo()
     check("refused -> unreachable", errkind(ue) == ERR.UNREACHABLE, errkind(ue))
 
+    local foreign = os.getenv("CS_FOREIGN_URL")
+    if foreign then
+        local _, fe = Calibre:new{ url = foreign }:libraryInfo()
+        check("other web server on the port -> not_calibre", errkind(fe) == ERR.NOT_CALIBRE, errkind(fe))
+        check("not_calibre names the server", fe and fe.message:find("SimpleHTTP", 1, true), fe and fe.message)
+    end
+
     local c2 = Calibre:new{ url = base, library_id = "lib2" }
     local l2 = c2:getBooks{}
     check("second library selected", l2 and l2.total == 1, l2 and l2.total)
