@@ -32,6 +32,8 @@ local logger = require("logger")
 local _ = require("gettext")
 
 local Calibre = csrequire("api/calibre")
+local Downloader = csrequire("lib/downloader")
+local Downloads = csrequire("lib/downloads")
 
 local DEFAULT_FORMATS = { "EPUB", "AZW3", "MOBI", "PDF" }
 
@@ -43,6 +45,8 @@ local CalibreShelf = WidgetContainer:extend{
 function CalibreShelf:init()
     self.plugin_root = plugin_root
     self:loadSettings()
+    self.downloads = Downloads:new(self.settings)
+    self.downloader = Downloader:new(self.downloads)
     self:onDispatcherRegisterActions()
     self.ui.menu:registerToMainMenu(self)
 end
@@ -77,12 +81,35 @@ end
 
 --- Backend client for the configured server (cheap; create per use).
 function CalibreShelf:getClient()
-    return Calibre:new{
+    return Calibre:new(self:clientOptions())
+end
+
+function CalibreShelf:clientOptions()
+    return {
         url = self.server.url,
         username = self.server.username,
         password = self.server.password,
         library_id = self.server.library_id,
     }
+end
+
+-- Local path of a downloaded copy of `book`, if any (preferred formats first).
+function CalibreShelf:downloadedPath(book)
+    return self.downloads:find(Calibre.normalizeUrl(self.server.url), self.server.library_id, book, self.formats)
+end
+
+-- Queue one book. `extra` may set replace_path, on_conflict, on_done.
+function CalibreShelf:downloadBook(book, fmt, extra)
+    local job = {
+        book = book,
+        fmt = fmt,
+        dir = self:getDownloadDir(),
+        client_opts = self:clientOptions(),
+        server_key = Calibre.normalizeUrl(self.server.url),
+        library_id = self.server.library_id,
+    }
+    for k, v in pairs(extra or {}) do job[k] = v end
+    return self.downloader:enqueue(job)
 end
 
 function CalibreShelf:onDispatcherRegisterActions()

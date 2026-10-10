@@ -24,6 +24,7 @@ local HorizontalGroup = require("ui/widget/horizontalgroup")
 local HorizontalSpan = require("ui/widget/horizontalspan")
 local IconButton = require("ui/widget/iconbutton")
 local InfoMessage = require("ui/widget/infomessage")
+local InputDialog = require("ui/widget/inputdialog")
 local NetworkMgr = require("ui/network/manager")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local RenderImage = require("ui/renderimage")
@@ -33,6 +34,7 @@ local UIManager = require("ui/uimanager")
 local VerticalGroup = require("ui/widget/verticalgroup")
 local VerticalSpan = require("ui/widget/verticalspan")
 local logger = require("logger")
+local util = require("util")
 local Screen = Device.screen
 local _ = require("gettext")
 local T = require("ffi/util").template
@@ -130,6 +132,7 @@ function LibraryScreen:buildHeader()
         subtitle = self:subtitle(),
         show_parent = self,
         actions = {
+            { icon = "appbar.search", callback = function() self:showSearch() end },
             { icon = "appbar.menu", callback = function() self:showMenu() end },
             { icon = "close", callback = function() self:onClose() end, allow_flash = false },
         },
@@ -228,6 +231,7 @@ function LibraryScreen:buildGrid()
                 any = true
                 local card = BookCard:new{
                     book = book,
+                    downloaded = self.plugin:downloadedPath(book) ~= nil,
                     width = self.cell_w,
                     cover_w = self.cover_w,
                     cover_h = self.cover_h,
@@ -464,20 +468,32 @@ end
 function LibraryScreen:onHold(_, ges)
     local card = self:cardAt(ges.pos)
     if card then
-        -- Multi-selection arrives in Stage 3.
+        -- Multi-selection comes next; until then hold behaves like tap.
         self:openBook(card.book)
         return true
     end
 end
 
 function LibraryScreen:openBook(book)
-    -- Full details screen arrives in Stage 2; show a compact summary for now.
-    local lines = { book.title }
-    if #book.authors > 0 then table.insert(lines, table.concat(book.authors, ", ")) end
-    local series = BookCard.seriesText(book)
-    if series then table.insert(lines, series) end
-    if #book.formats > 0 then table.insert(lines, table.concat(book.formats, " · ")) end
-    UIManager:show(InfoMessage:new{ text = table.concat(lines, "\n"), show_icon = false })
+    local BookDetails = csrequire("screens/bookdetails")
+    UIManager:show(BookDetails:new{
+        plugin = self.plugin,
+        book = book,
+        client = self.client,
+        on_change = function() self:updateDownloadedBadges() end,
+    })
+end
+
+function LibraryScreen:updateDownloadedBadges()
+    local changed = {}
+    for _, card in ipairs(self.cards or {}) do
+        local downloaded = self.plugin:downloadedPath(card.book) ~= nil
+        if downloaded ~= card.downloaded then
+            card:setDownloaded(downloaded)
+            table.insert(changed, card)
+        end
+    end
+    if #changed > 0 then self:refreshCards(changed) end
 end
 
 function LibraryScreen:onNextPage()
@@ -494,21 +510,107 @@ function LibraryScreen:onPrevPage()
     return true
 end
 
+-- Run a new listing (search and/or sort), keeping the old one if it fails.
+function LibraryScreen:applyQuery(changes)
+    local previous = {}
+    for k, v in pairs(self.query) do previous[k] = v end
+    for k, v in pairs(changes) do self.query[k] = v end
+    local old_ids, old_books, old_total, old_last, old_page =
+        self.ids, self.books, self.total, self.last_result, self.page
+    self:resetData()
+    self:ensureLoaded(1, function(ok, err)
+        if not ok then
+            self.query = previous
+            self.ids, self.books, self.total, self.last_result, self.page =
+                old_ids, old_books, old_total, old_last, old_page
+            UIManager:show(InfoMessage:new{ text = err.message })
+            return
+        end
+        self.page = 1
+        self:build()
+        self:repaint(true)
+        self:loadCovers()
+    end)
+end
+
+function LibraryScreen:showSearch()
+    local dialog
+    dialog = InputDialog:new{
+        title = _("Search library"),
+        input = self.query.search,
+        input_hint = _("Title, author, tag or Calibre search"),
+        description = _("Uses Calibre's search, e.g. authors:herbert or tags:\"sci-fi\"."),
+        buttons = {{
+            { text = _("Cancel"), id = "close", callback = function() UIManager:close(dialog) end },
+            { text = _("Search"), is_enter_default = true, callback = function()
+                local text = util.trim(dialog:getInputText())
+                UIManager:close(dialog)
+                self:applyQuery{
+                    search = text,
+                    title = text ~= "" and text or self.plugin.server.library_name or _("Library"),
+                }
+            end },
+        }},
+    }
+    UIManager:show(dialog)
+    dialog:onShowKeyboard()
+end
+
+local SORT_FIELDS = {
+    { field = "timestamp", order = "desc" },
+    { field = "title", order = "asc" },
+    { field = "authors", order = "asc" },
+    { field = "series", order = "asc" },
+}
+
+function LibraryScreen:showSort()
+    local dialog
+    local buttons = {}
+    local function choose(field, order)
+        UIManager:close(dialog)
+        self.plugin.sort = { field = field, order = order }
+        self.plugin:saveSettings()
+        self:applyQuery{ sort = field, order = order }
+    end
+    for _, s in ipairs(SORT_FIELDS) do
+        local current = self.query.sort == s.field
+        table.insert(buttons, {{
+            text = SORT_LABELS[s.field] .. (current and "  \u{2713}" or ""),
+            callback = function() choose(s.field, s.order) end,
+        }})
+    end
+    table.insert(buttons, {{
+        text = self.query.order == "desc" and _("Ascending order") or _("Descending order"),
+        callback = function() choose(self.query.sort, self.query.order == "desc" and "asc" or "desc") end,
+    }})
+    dialog = ButtonDialog:new{ title = _("Sort by"), buttons = buttons }
+    UIManager:show(dialog)
+end
+
 function LibraryScreen:showMenu()
     local dialog
-    dialog = ButtonDialog:new{
-        buttons = {
-            {{ text = _("Refresh"), callback = function()
-                UIManager:close(dialog)
-                self:refresh()
-            end }},
-            {{ text = _("Server settings"), callback = function()
-                UIManager:close(dialog)
-                self:onClose()
-                self.plugin:showSettings()
-            end }},
-        },
+    local buttons = {
+        {{ text = _("Sort by…"), callback = function()
+            UIManager:close(dialog)
+            self:showSort()
+        end }},
     }
+    if self.query.search ~= "" then
+        table.insert(buttons, 1, {{ text = _("Show all books"), callback = function()
+            UIManager:close(dialog)
+            self:applyQuery{ search = "", title = self.plugin.server.library_name or _("Library") }
+        end }})
+    end
+    table.insert(buttons, {{ text = _("Refresh"), callback = function()
+        UIManager:close(dialog)
+        self:refresh()
+    end }})
+    table.insert(buttons, {{ text = _("Server settings"), callback = function()
+        UIManager:close(dialog)
+        self:onClose()
+        self.plugin:showSettings()
+    end }})
+    dialog = ButtonDialog:new{ buttons = buttons }
     UIManager:show(dialog)
 end
 
