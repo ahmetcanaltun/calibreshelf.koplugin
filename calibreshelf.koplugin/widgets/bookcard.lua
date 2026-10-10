@@ -1,13 +1,5 @@
---[[--
-One book in the library grid: cover (or a text placeholder), title, author,
-optional series line, plus Downloaded / Selected markers.
-
-The card owns its cover BlitBuffer and frees it in free(). The card itself has
-no gesture handling; the library screen hit-tests cards by their dimen, which
-keeps the event tree small.
-
-@module calibreshelf.widgets.bookcard
-]]
+-- One book in the grid: cover or placeholder, title, author, series, and the
+-- selected / on-device markers. The library hit-tests cards itself.
 
 local Blitbuffer = require("ffi/blitbuffer")
 local BottomContainer = require("ui/widget/container/bottomcontainer")
@@ -43,7 +35,7 @@ local BookCard = WidgetContainer:extend{
 local SELECT_BORDER = Screen:scaleBySize(4)
 local BADGE_PAD = Screen:scaleBySize(4)
 
---- Height of the text block under the cover (constant for a given layout).
+-- Height of the text block under the cover (constant for a given layout).
 function BookCard.textHeight(show_series)
     local F = Common.F
     local line = function(face) return TextWidget:new{ text = "Ag", face = face, padding = 0 }:getSize().h end
@@ -191,7 +183,7 @@ function BookCard:getSize()
     return self.dimen
 end
 
---- Take ownership of a rendered cover BlitBuffer.
+-- Take ownership of a rendered cover BlitBuffer.
 function BookCard:setCover(bb)
     if self.cover_bb and self.cover_bb ~= bb then self.cover_bb:free() end
     self.cover_bb = bb

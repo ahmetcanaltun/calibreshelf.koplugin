@@ -1,10 +1,4 @@
---[[--
-CalibreShelf: a native e-ink client for Calibre Content Server.
-
-Browse, search and download books from a remote Calibre library.
-
-@module koplugin.CalibreShelf
-]]
+-- CalibreShelf: browse and download books from a Calibre Content Server.
 
 -- Root-anchored module loader. KOReader appends every plugin dir to
 -- package.path, so plain require("screens/settings") could resolve to another
@@ -70,7 +64,7 @@ function CalibreShelf:loadSettings()
     self.sort = self.settings:readSetting("sort", { field = "timestamp", order = "desc" })
 end
 
---- Persist settings now (small file; written on change, not on every repaint).
+-- Persist settings now (small file; written on change, not on every repaint).
 function CalibreShelf:saveSettings()
     self.settings:saveSetting("server", self.server)
     self.settings:saveSetting("formats", self.formats)
@@ -90,7 +84,7 @@ function CalibreShelf:getDownloadDir()
         or DataStorage:getFullDataDir()
 end
 
---- Backend client for the configured server (cheap; create per use).
+-- Backend client for the configured server (cheap; create per use).
 function CalibreShelf:getClient()
     return Calibre:new(self:clientOptions())
 end
@@ -175,7 +169,7 @@ function CalibreShelf:showSettings()
     UIManager:show(SettingsScreen:new{ plugin = self })
 end
 
---- Open a local file in KOReader (used by "Open" / "Open now").
+-- Open a local file in KOReader (used by "Open" / "Open now").
 function CalibreShelf:openFile(path)
     if self.library_screen then
         self.library_screen:onClose(true)

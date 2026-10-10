@@ -1,18 +1,7 @@
---[[--
-Full-screen cover grid of the remote Calibre library.
-
-Data flow: books are fetched page-by-page from the server (get-books, then
-more-books with an offset) and kept as an ordered id list plus a small
-normalized-metadata map. Only the visible page has widgets; cover BlitBuffers
-of the previous page are freed on page turn.
-
-E-ink: one refresh for the page, then covers are filled in from the disk cache
-(sync, one refresh) and from the network one per UI tick, refreshed in
-row-sized batches with "ui" + dithering. A "full" refresh is done every
-FULL_REFRESH_EVERY page turns to clear ghosting.
-
-@module calibreshelf.screens.library
-]]
+-- Cover grid of the remote library. Books are fetched page by page and only the
+-- visible page has widgets. Covers come from the disk cache first, then the
+-- server one per tick, refreshed a row at a time; every few page turns we do a
+-- full refresh to clear ghosting.
 
 local Button = require("ui/widget/button")
 local ButtonDialog = require("ui/widget/buttondialog")
@@ -100,7 +89,7 @@ function LibraryScreen:resetData()
     self.message = nil
 end
 
---- Grid geometry: columns from a target cell width, rows rounded so covers stay ~2:3.
+-- Grid geometry: columns from a target cell width, rows rounded so covers stay ~2:3.
 function LibraryScreen:computeLayout()
     local S = Common.S
     local W, H = self.dimen.w, self.dimen.h
@@ -400,7 +389,7 @@ function LibraryScreen:updateChrome()
     UIManager:setDirty(self, "ui", Geom:new{ x = 0, y = H - self.footer_h, w = W, h = self.footer_h })
 end
 
---- Repaint the whole screen; "partial" normally, "full" every few turns.
+-- Repaint the whole screen; "partial" normally, "full" every few turns.
 function LibraryScreen:repaint(force_full)
     self.turns = self.turns + 1
     local mode = (force_full or self.turns % FULL_REFRESH_EVERY == 0) and "full" or "partial"
@@ -411,7 +400,7 @@ end
 -- Data loading
 ---------------------------------------------------------------------------
 
---- Make sure ids for `page` are loaded, fetching more from the server if needed.
+-- Make sure ids for `page` are loaded, fetching more from the server if needed.
 function LibraryScreen:loadCached()
     local data = Store.loadCatalog(self.server_key, self.library_id)
     if not data then return false end
@@ -561,7 +550,7 @@ function LibraryScreen:thumbPath(book)
     return Store.thumbPath(self.server_key, self.library_id, book, self.cover_w, self.cover_h)
 end
 
---- Refresh only the region covering `cards` (one e-ink update per batch).
+-- Refresh only the region covering `cards` (one e-ink update per batch).
 function LibraryScreen:refreshCards(cards)
     local region
     for _i, card in ipairs(cards) do

@@ -1,13 +1,5 @@
---[[--
-Local storage: cache directories and the on-disk thumbnail cache.
-
-Layout (under KOReader's data dir):
-    cache/calibreshelf/thumbs/<server-hash>/<lib-hash>_<id>_<w>x<h>_<mtime-hash>.jpg
-
-Only sized thumbnails are cached; full-size covers never are.
-
-@module calibreshelf.lib.store
-]]
+-- On-disk cache: sized thumbnails and the last viewed catalog, under
+-- <data dir>/cache/calibreshelf. Full-size covers are never cached.
 
 local DataStorage = require("datastorage")
 local LuaSettings = require("luasettings")
@@ -24,7 +16,7 @@ local Store = {
 
 Store.root = DataStorage:getDataDir() .. "/cache/calibreshelf"
 
---- Short stable hash (djb2, hex) for building file names from URLs/ids.
+-- Short stable hash (djb2, hex) for building file names from URLs/ids.
 function Store.hash(s)
     local h = 5381
     s = tostring(s or "")
@@ -58,7 +50,7 @@ function Store.readFile(path)
     return data
 end
 
---- Write atomically: tmp file then rename.
+-- Write atomically: tmp file then rename.
 function Store.writeFile(path, data)
     local tmp = path .. ".tmp"
     local f = io.open(tmp, "wb")
@@ -76,7 +68,7 @@ local function catalogPath(server_key, library_id)
     return ensureDir(Store.root) .. "/catalog-" .. Store.hash(server_key) .. "-" .. Store.hash(library_id) .. ".lua"
 end
 
---- Save the last viewed listing so it can be browsed offline.
+-- Save the last viewed listing so it can be browsed offline.
 -- listing = { query = {...}, total = n, ids = {...}, books = {[id] = book} }
 function Store.saveCatalog(server_key, library_id, listing)
     local ids, books = {}, {}
@@ -112,7 +104,7 @@ function Store.loadCatalog(server_key, library_id)
     return data
 end
 
---- Delete oldest thumbnails beyond MAX_THUMBS (cheap: one directory scan).
+-- Delete oldest thumbnails beyond MAX_THUMBS (cheap: one directory scan).
 function Store.pruneThumbs()
     local base = Store.root .. "/thumbs"
     if not util.directoryExists(base) then return end
@@ -151,7 +143,7 @@ local function removeTree(path)
     lfs.rmdir(path)
 end
 
---- "Clear CalibreShelf cache": thumbnails and cached catalog metadata.
+-- "Clear CalibreShelf cache": thumbnails and cached catalog metadata.
 -- The downloaded-books map lives in settings and is NOT touched.
 function Store.clearCache()
     removeTree(Store.root)

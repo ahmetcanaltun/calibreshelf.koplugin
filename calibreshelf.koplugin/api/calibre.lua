@@ -1,19 +1,7 @@
---[[--
-Calibre Content Server client.
-
-ALL Calibre-specific HTTP lives in this file. The /interface-data/* routes are
-internal to Calibre's web UI and may change between versions; request/response
-fields are documented in docs/API_CONTRACT.md (verified against calibre a41c889814f2).
-
-The public surface (libraryInfo, getBooks, moreBooks, newlyAdded, browseField,
-bookMetadata, fetchThumbnail, fetchCover, downloadFormat) is the backend
-interface screens depend on. An OPDS adapter can implement the same methods.
-
-Every method returns `result` on success or `nil, err` where
-err = { kind = Calibre.ERR.*, message = <short human text>, detail = <log text> }.
-
-@module calibreshelf.api.calibre
-]]
+-- Calibre Content Server client. All Calibre HTTP lives here; the
+-- /interface-data routes are internal to calibre's web UI, see docs/calibre-api.md.
+-- Methods return a result, or nil plus { kind, message, detail }.
+-- Screens only use the public methods, so another backend (e.g. OPDS) can stand in.
 
 local http = require("socket.http")
 local json = require("json")
@@ -71,7 +59,7 @@ local function makeError(kind, detail, message)
 end
 Calibre.makeError = makeError
 
---- Normalize a user-entered server address: add scheme, drop trailing slashes.
+-- Normalize a user-entered server address: add scheme, drop trailing slashes.
 function Calibre.normalizeUrl(address)
     address = util.trim(address or "")
     if address == "" then return nil end
@@ -105,7 +93,6 @@ local function encodeQuery(query)
     return "?" .. table.concat(parts, "&")
 end
 
---- @param o { url, username, password, library_id }
 function Calibre:new(o)
     o = o or {}
     local client = setmetatable({
@@ -117,7 +104,7 @@ function Calibre:new(o)
     return client
 end
 
---- Stable identifier of this server, used for cache paths and the download map.
+-- Stable identifier of this server, used for cache paths and the download map.
 function Calibre:serverKey()
     return self.base_url
 end
@@ -134,13 +121,10 @@ local function classifySocketError(code)
     return ERR.UNREACHABLE
 end
 
---[[--
-Low-level request. Mirrors opds.koplugin's OPDSClient:request: socket.skip(1, http.request{...}),
-redirect=false (followed manually, same origin only, no https→http downgrade).
-
-opts: path, query, method, body (string), headers, sink, timeout ("large" | "file")
-Returns code, headers, status, body_string_or_nil
-]]
+-- Same approach as opds.koplugin's OPDSClient: redirects are followed by hand,
+-- same host only, never from https to http.
+-- opts: path, query, method, body, headers, sink, timeout ("large" or "file").
+-- Returns code, headers, status and the body (nil when a sink was given).
 function Calibre:_rawRequest(opts)
     local request_url = opts.url or self:buildUrl(opts.path, opts.query)
     local origin = url.parse(request_url)
@@ -197,7 +181,7 @@ function Calibre:_rawRequest(opts)
     return code, resp_headers, status, body
 end
 
---- Map a non-200 response to an error object.
+-- Map a non-200 response to an error object.
 function Calibre:_httpError(code, headers, status, body, context)
     local detail = string.format("%s -> %s %s", context or "?", tostring(code), tostring(status or ""))
     if type(code) ~= "number" then
@@ -227,7 +211,7 @@ function Calibre:_httpError(code, headers, status, body, context)
         string.format("%s (HTTP %d)", MESSAGES[ERR.HTTP], code))
 end
 
---- GET/POST returning decoded JSON (a table).
+-- GET/POST returning decoded JSON (a table).
 function Calibre:_json(opts)
     local code, headers, status, body = self:_rawRequest(opts)
     local context = (opts.method or "GET") .. " " .. (opts.path or "")
@@ -253,7 +237,7 @@ local function list(v)
     return out
 end
 
---- Reduce book_as_json to what the UI needs (keeps RAM low on the device).
+-- Reduce book_as_json to what the UI needs (keeps RAM low on the device).
 function Calibre.normalizeBook(id, m)
     if type(m) ~= "table" then return nil end
     local sizes = {}
@@ -281,7 +265,7 @@ function Calibre.normalizeBook(id, m)
     }
 end
 
---- Validate and flatten { search_result, metadata } into a page.
+-- Validate and flatten { search_result, metadata } into a page.
 local function parseBookPage(data, context)
     local sr = data.search_result
     if type(sr) ~= "table" or type(sr.book_ids) ~= "table" or type(data.metadata) ~= "table" then
@@ -313,7 +297,7 @@ local function parseBookPage(data, context)
     return page
 end
 
---- { library_map = {id = name}, default_library = id }
+-- { library_map = {id = name}, default_library = id }
 function Calibre:libraryInfo()
     local data, err = self:_json{ path = "/ajax/library-info" }
     if not data then return nil, err end
@@ -326,10 +310,7 @@ function Calibre:libraryInfo()
     }
 end
 
---[[--
-First page of a listing.
-@param q { search = "", sort = "timestamp", order = "desc", num = 30, vl = "" }
-]]
+-- First page of a listing. q = { search, sort, order, num, vl }, all optional.
 function Calibre:getBooks(q)
     q = q or {}
     local data, err = self:_json{
@@ -346,7 +327,7 @@ function Calibre:getBooks(q)
     return parseBookPage(data, "get-books")
 end
 
---- Next page, continuing a page returned by getBooks/moreBooks.
+-- Next page, continuing a page returned by getBooks/moreBooks.
 function Calibre:moreBooks(prev_page, offset, num_books)
     local data, err = self:_json{
         path = "/interface-data/more-books",
@@ -364,7 +345,7 @@ function Calibre:moreBooks(prev_page, offset, num_books)
     return parseBookPage(data, "more-books")
 end
 
---- { ids = {...}, titles = {[id]=title}, authors = {[id]={...}} }
+-- { ids = {...}, titles = {[id]=title}, authors = {[id]={...}} }
 function Calibre:newlyAdded(num_books)
     local data, err = self:_json{
         path = "/interface-data/newly-added",
@@ -393,7 +374,7 @@ local function exactSearch(field, name)
     return string.format('%s:"=%s"', field, (name:gsub("\\", "\\\\"):gsub('"', '\\"')))
 end
 
---- Fallback for servers without browse-field (e.g. calibre 7.x): names only, no counts.
+-- Fallback for servers without browse-field (e.g. calibre 7.x): names only, no counts.
 function Calibre:_browseFieldNames(field)
     local data, err = self:_json{
         path = "/interface-data/field-names/" .. encodeSegment(field),
@@ -416,7 +397,7 @@ function Calibre:_browseFieldNames(field)
     return items
 end
 
---- Items of a browse field: { {name, count|nil, search}, ... }
+-- Items of a browse field: { {name, count|nil, search}, ... }
 function Calibre:browseField(field)
     if self.no_browse_field then
         return self:_browseFieldNames(field)
@@ -448,7 +429,7 @@ function Calibre:browseField(field)
     return items
 end
 
---- Full metadata of one book (normalized).
+-- Full metadata of one book (normalized).
 function Calibre:bookMetadata(book_id)
     local data, err = self:_json{
         path = "/interface-data/book-metadata/" .. encodeSegment(book_id),
@@ -469,7 +450,7 @@ local function fetchImage(self, path, query, context)
     return body
 end
 
---- JPEG bytes of a thumbnail scaled by the server to fit w x h pixels.
+-- JPEG bytes of a thumbnail scaled by the server to fit w x h pixels.
 function Calibre:fetchThumbnail(book_id, w, h)
     return fetchImage(self,
         "/get/thumb/" .. encodeSegment(book_id) .. "/" .. encodeSegment(self.library_id or ""),
@@ -477,14 +458,14 @@ function Calibre:fetchThumbnail(book_id, w, h)
         "thumb " .. book_id)
 end
 
---- Full-size cover JPEG bytes (details page only; never cached).
+-- Full-size cover JPEG bytes (details page only; never cached).
 function Calibre:fetchCover(book_id)
     return fetchImage(self,
         "/get/cover/" .. encodeSegment(book_id) .. "/" .. encodeSegment(self.library_id or ""),
         nil, "cover " .. book_id)
 end
 
---- Filename from Content-Disposition (prefers RFC 6266 filename*), or nil.
+-- Filename from Content-Disposition (prefers RFC 6266 filename*), or nil.
 function Calibre.filenameFromHeaders(headers)
     local cd = headers and headers["content-disposition"]
     if not cd then return nil end
@@ -495,10 +476,8 @@ function Calibre.filenameFromHeaders(headers)
     return cd:match('filename%s*=%s*"([^"]+)"') or cd:match("filename%s*=%s*([^;]+)")
 end
 
---[[--
-Download one format to `dest_path` (caller supplies a temporary path and renames
-on success). Returns headers on success, or nil, err.
-]]
+-- Downloads one format to dest_path (a temp file the caller renames).
+-- Returns the response headers, or nil and an error.
 function Calibre:downloadFormat(book_id, fmt, dest_path)
     local handle, open_err = io.open(dest_path, "wb")
     if not handle then

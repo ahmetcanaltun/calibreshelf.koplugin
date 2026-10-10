@@ -1,9 +1,5 @@
---[[--
-Server setup screen: URL, credentials, Test connection, library selection,
-download folder, preferred format order, cache clearing.
-
-@module calibreshelf.screens.settings
-]]
+-- Server setup: address, login, connection test, library, download folder,
+-- format order and cache clearing.
 
 local Button = require("ui/widget/button")
 local ButtonDialog = require("ui/widget/buttondialog")
@@ -26,6 +22,7 @@ local csrequire = require("calibreshelf/require")
 local Calibre = csrequire("api/calibre")
 local Common = csrequire("widgets/common")
 local Store = csrequire("lib/store")
+local ZenHome = csrequire("widgets/zenhome")
 
 -- Formats offered in the preference list (KOReader can open all of these).
 local KNOWN_FORMATS = { "EPUB", "KEPUB", "AZW3", "MOBI", "PDF", "FB2", "CBZ", "DJVU", "DOCX", "RTF", "TXT", "HTML" }
@@ -116,6 +113,12 @@ function SettingsScreen:rebuild()
     UIManager:setDirty(self, "ui")
 end
 
+-- Home widget data belongs to one server/library; drop it when that changes.
+function SettingsScreen:libraryChanged()
+    self.plugin.settings:delSetting("home")
+    if ZenHome.available() then ZenHome.register(self.plugin) end
+end
+
 function SettingsScreen:editField(field)
     local server = self.plugin.server
     local titles = {
@@ -155,6 +158,8 @@ function SettingsScreen:editField(field)
                         if normalized ~= server.url then
                             -- New server: library ids from the old one are meaningless.
                             server.library_id, server.library_name = nil, nil
+                            self.libraries = nil
+                            self:libraryChanged()
                         end
                         value = normalized
                     elseif value == "" then
@@ -173,7 +178,7 @@ function SettingsScreen:editField(field)
     dialog:onShowKeyboard()
 end
 
---- Run fn(client) when online, with a "Connecting…" message shown meanwhile.
+-- Fetch the library list (with a "Connecting…" message) and pass fn(info, err).
 function SettingsScreen:withConnection(fn)
     NetworkMgr:runWhenConnected(function()
         local info = InfoMessage:new{ text = _("Connecting to Calibre…") }
@@ -230,6 +235,7 @@ function SettingsScreen:chooseLibrary()
                 text = lib.name .. (lib.id == server.library_id and "  ✓" or ""),
                 callback = function()
                     UIManager:close(dialog)
+                    if lib.id ~= server.library_id then self:libraryChanged() end
                     server.library_id, server.library_name = lib.id, lib.name
                     self.plugin:saveSettings()
                     self:rebuild()

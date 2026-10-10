@@ -1,12 +1,5 @@
---[[--
-Shared look & building blocks for CalibreShelf screens.
-
-Style: monochrome, large type, generous spacing, minimal borders, big touch
-targets (>= ~9 mm). No animations. Everything is sized with Screen:scaleBySize
-so it scales from the 300 PPI Paperwhite 12 down to older devices.
-
-@module calibreshelf.widgets.common
-]]
+-- Shared styles and building blocks: header, rows, sections and a full-screen
+-- page base. Sizes go through scaleBySize so they hold up on smaller screens.
 
 local Blitbuffer = require("ffi/blitbuffer")
 local Device = require("device")
@@ -62,10 +55,8 @@ function Common.hline(width, color, thickness)
     }
 end
 
---[[--
-Full-width header: big bold title on the left, icon actions on the right.
-@param o { width, title, subtitle, actions = { {icon=, callback=, hold_callback=} } }
-]]
+-- Title (and optional subtitle) on the left, icon buttons on the right.
+-- o = { width, title, subtitle, actions = { { icon, callback, hold_callback } } }
 function Common.header(o)
     local S = Common.S
     local icons = HorizontalGroup:new{}
@@ -119,9 +110,7 @@ function Common.header(o)
     }
 end
 
---[[--
-A tappable settings row: bold label on the left, value (gray) on the right.
-]]
+-- Tappable row: label on the left, value on the right.
 local Row = InputContainer:extend{
     width = nil,
     label = "",
@@ -184,7 +173,7 @@ end
 
 Common.Row = Row
 
---- Section heading inside a page (small caps-ish gray label).
+-- Section heading inside a page (small caps-ish gray label).
 function Common.section(width, text)
     local S = Common.S
     return VerticalGroup:new{
@@ -199,10 +188,8 @@ function Common.section(width, text)
     }
 end
 
---[[--
-Base class for full-screen pages. Subclasses build self[1] and may override
-onSwipe. Back key / swipe-down / close icon call onClose.
-]]
+-- Base for full-screen pages. Back, swipe down and the close icon call onClose;
+-- swipe left/right call onNextPage/onPrevPage when defined.
 local Page = InputContainer:extend{
     covers_fullscreen = true, -- hint for UIManager:_repaint()
     close_callback = nil,
@@ -243,7 +230,7 @@ function Page:onClose()
     return true
 end
 
---- Wrap content in a white full-screen frame.
+-- Wrap content in a white full-screen frame.
 function Page:wrap(content)
     return FrameContainer:new{
         width = self.dimen.w,

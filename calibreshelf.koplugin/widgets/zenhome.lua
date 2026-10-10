@@ -175,7 +175,7 @@ function ZenHome.register(plugin)
     return res ~= false
 end
 
---- Save new Home state from a page of books (newest first) and redraw the widget.
+-- Save new Home state from a page of books (newest first) and redraw the widget.
 -- `books` are normalized books; `thumb_for(book)` returns a cached thumbnail path.
 function ZenHome.update(plugin, total, books, thumb_for)
     local recent = {}
@@ -193,7 +193,7 @@ function ZenHome.update(plugin, total, books, thumb_for)
     if ZenHome.available() then ZenHome.register(plugin) end
 end
 
---- Background refresh: newest books and their thumbnails. Never prompts for Wi-Fi.
+-- Background refresh: newest books and their thumbnails. Never prompts for Wi-Fi.
 function ZenHome.refresh(plugin, force)
     if not plugin:isConfigured() or not NetworkMgr:isConnected() then return end
     local state = plugin.settings:readSetting("home") or {}
@@ -217,7 +217,7 @@ function ZenHome.refresh(plugin, force)
     end)
 end
 
---- Schedule a refresh shortly after startup so it never delays the Home page.
+-- Schedule a refresh shortly after startup so it never delays the Home page.
 function ZenHome.scheduleRefresh(plugin)
     UIManager:scheduleIn(5, function() ZenHome.refresh(plugin) end)
 end
