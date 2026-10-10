@@ -409,7 +409,7 @@ function BookDetails:loadCover()
     if self.closed then return end
     local path = Store.thumbPath(self.server_key, self.library_id, self.book, self.cover_w, self.cover_h)
     local data = Store.readFile(path)
-    if not data and NetworkMgr:isOnline() then
+    if not data and NetworkMgr:isConnected() then
         local err
         data, err = self.client:fetchThumbnail(self.book.id, self.cover_w, self.cover_h)
         if data then

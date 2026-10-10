@@ -97,7 +97,7 @@ Advanced, or remove users").
 | `ui/widget/container/widgetcontainer` | plugin base (`name`, `init`, `self.ui.menu:registerToMainMenu`) |
 | `dispatcher` | `Dispatcher:registerAction(id, {category="none", event=…, title=…, general=true})` |
 | `luasettings` + `datastorage` | `LuaSettings:open(DataStorage:getSettingsDir().."/calibreshelf.lua")`, `readSetting/saveSetting/flush` |
-| `ui/network/manager` | `NetworkMgr:runWhenOnline(cb)` before any request, `isOnline()` |
+| `ui/network/manager` | `NetworkMgr:runWhenConnected(cb)` before any request, `isConnected()` (not *Online: that needs internet DNS, LAN servers must work without it) |
 | `socketutil` | `set_timeout(LARGE_BLOCK_TIMEOUT, LARGE_TOTAL_TIMEOUT)` for JSON, `FILE_*` for books, `reset_timeout()`, `table_sink`, `file_sink`, `redact_request`, `TIMEOUT_CODE`, `SINK_TIMEOUT_CODE` |
 | `socket.http`, `socket`, `ltn12`, `socket.url`, `mime` | `socket.skip(1, http.request{url, method, headers, sink, source, redirect=false})`, same as opds.koplugin `OPDSClient:request` |
 | `json` | `pcall(json.decode, s)`, `json.encode(t)` |

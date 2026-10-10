@@ -416,7 +416,7 @@ function LibraryScreen:ensureLoaded(page, callback)
     if self.total and #self.ids >= need then
         return callback(true)
     end
-    NetworkMgr:runWhenOnline(function()
+    NetworkMgr:runWhenConnected(function()
         local result, err
         while not err and (not self.total or #self.ids < need) do
             if not self.last_result then
@@ -538,7 +538,7 @@ function LibraryScreen:loadCovers()
         UIManager:setDirty(self, "ui", nil, true)
     end
     if #missing == 0 then return end
-    if not NetworkMgr:isOnline() then return end
+    if not NetworkMgr:isConnected() then return end
 
     local pending = {}
     local function step()
@@ -826,7 +826,7 @@ function LibraryScreen:showBrowse(field)
         })
     end
     if self.browse_cache[field] then return show(self.browse_cache[field]) end
-    NetworkMgr:runWhenOnline(function()
+    NetworkMgr:runWhenConnected(function()
         local info = InfoMessage:new{ text = _("Loading…") }
         UIManager:show(info)
         UIManager:forceRePaint()

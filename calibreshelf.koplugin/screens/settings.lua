@@ -175,7 +175,7 @@ end
 
 --- Run fn(client) when online, with a "Connecting…" message shown meanwhile.
 function SettingsScreen:withConnection(fn)
-    NetworkMgr:runWhenOnline(function()
+    NetworkMgr:runWhenConnected(function()
         local info = InfoMessage:new{ text = _("Connecting to Calibre…") }
         UIManager:show(info)
         UIManager:forceRePaint()

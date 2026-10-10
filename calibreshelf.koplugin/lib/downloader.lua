@@ -83,7 +83,7 @@ function Downloader:startNext()
         end
     end
     if not job then return end
-    NetworkMgr:runWhenOnline(function() self:run(job) end)
+    NetworkMgr:runWhenConnected(function() self:run(job) end)
 end
 
 function Downloader:fail(job, err, tmp)
