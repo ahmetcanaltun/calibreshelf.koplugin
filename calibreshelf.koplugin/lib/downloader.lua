@@ -67,7 +67,7 @@ end
 
 function Downloader:pending()
     local n = 0
-    for _, job in ipairs(self.jobs) do
+    for _i, job in ipairs(self.jobs) do
         if job.status == "queued" or job.status == "downloading" then n = n + 1 end
     end
     return n
@@ -76,7 +76,7 @@ end
 function Downloader:startNext()
     if self.current then return end
     local job
-    for _, j in ipairs(self.jobs) do
+    for _i, j in ipairs(self.jobs) do
         if j.status == "queued" then
             job = j
             break
@@ -123,7 +123,7 @@ function Downloader:run(job)
     os.remove(tmp)
     job.tmp = tmp
     local opts, book_id, fmt = job.client_opts, job.book.id, job.fmt
-    local pid, fd = ffiutil.runInSubProcess(function(_, write_fd)
+    local pid, fd = ffiutil.runInSubProcess(function(_arg, write_fd)
         local headers, err = Calibre:new(opts):downloadFormat(book_id, fmt, tmp)
         local result = {
             filename = headers and Calibre.filenameFromHeaders(headers) or nil,
@@ -250,7 +250,7 @@ end
 
 function Downloader:clearFinished()
     local keep = {}
-    for _, job in ipairs(self.jobs) do
+    for _i, job in ipairs(self.jobs) do
         if job.status == "queued" or job.status == "downloading" then
             table.insert(keep, job)
         end

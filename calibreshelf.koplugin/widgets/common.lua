@@ -69,7 +69,7 @@ Full-width header: big bold title on the left, icon actions on the right.
 function Common.header(o)
     local S = Common.S
     local icons = HorizontalGroup:new{}
-    for _, a in ipairs(o.actions or {}) do
+    for _i, a in ipairs(o.actions or {}) do
         table.insert(icons, IconButton:new{
             icon = a.icon,
             width = S.icon,
@@ -218,7 +218,7 @@ function Page:initPage()
     end
 end
 
-function Page:onSwipe(_, ges)
+function Page:onSwipe(_arg, ges)
     local direction = BD.flipDirectionIfMirroredUILayout(ges.direction)
     if direction == "west" and self.onNextPage then
         return self:onNextPage()

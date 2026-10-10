@@ -28,11 +28,11 @@ end
 
 -- First downloaded format of a book that still exists on disk, in the given order.
 function Downloads:find(server_key, library_id, book, formats)
-    for _, fmt in ipairs(formats or book.formats) do
+    for _i, fmt in ipairs(formats or book.formats) do
         local path = self:get(server_key, library_id, book.id, fmt)
         if path then return path, fmt end
     end
-    for _, fmt in ipairs(book.formats) do
+    for _i, fmt in ipairs(book.formats) do
         local path = self:get(server_key, library_id, book.id, fmt)
         if path then return path, fmt end
     end
@@ -57,11 +57,11 @@ end
 -- Preferred format the book has, else the first one KOReader can open.
 function Downloads.pickFormat(book, preferred)
     local have = {}
-    for _, f in ipairs(book.formats) do have[f] = true end
-    for _, f in ipairs(preferred or {}) do
+    for _i, f in ipairs(book.formats) do have[f] = true end
+    for _i, f in ipairs(preferred or {}) do
         if have[f] then return f end
     end
-    for _, f in ipairs(book.formats) do
+    for _i, f in ipairs(book.formats) do
         if Downloads.canOpen(f) then return f end
     end
 end

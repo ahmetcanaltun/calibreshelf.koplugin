@@ -182,7 +182,7 @@ function LibraryScreen:buildFooter()
 end
 
 function LibraryScreen:freeCards()
-    for _, card in ipairs(self.cards or {}) do card:free() end
+    for _i, card in ipairs(self.cards or {}) do card:free() end
     self.cards = {}
 end
 
@@ -309,7 +309,7 @@ function LibraryScreen:ensureLoaded(page, callback)
             if result then
                 self.last_result = result
                 self.total = result.total
-                for _, id in ipairs(result.ids) do
+                for _i, id in ipairs(result.ids) do
                     if not self.books[id] then
                         table.insert(self.ids, id)
                     end
@@ -385,7 +385,7 @@ end
 --- Refresh only the region covering `cards` (one e-ink update per batch).
 function LibraryScreen:refreshCards(cards)
     local region
-    for _, card in ipairs(cards) do
+    for _i, card in ipairs(cards) do
         if card.dimen and card.dimen.x then
             region = region and region:combine(card.dimen) or card.dimen:copy()
         end
@@ -399,7 +399,7 @@ function LibraryScreen:loadCovers()
     self.cover_gen = (self.cover_gen or 0) + 1
     local gen = self.cover_gen
     local missing, cached = {}, {}
-    for _, card in ipairs(self.cards) do
+    for _i, card in ipairs(self.cards) do
         local data = Store.readFile(self:thumbPath(card.book))
         local bb = data and self:renderCover(data)
         if bb then
@@ -450,14 +450,14 @@ end
 ---------------------------------------------------------------------------
 
 function LibraryScreen:cardAt(pos)
-    for _, card in ipairs(self.cards or {}) do
+    for _i, card in ipairs(self.cards or {}) do
         if card.dimen and card.dimen.x and card.dimen:contains(pos) then
             return card
         end
     end
 end
 
-function LibraryScreen:onTap(_, ges)
+function LibraryScreen:onTap(_arg, ges)
     local card = self:cardAt(ges.pos)
     if card then
         self:openBook(card.book)
@@ -465,7 +465,7 @@ function LibraryScreen:onTap(_, ges)
     end
 end
 
-function LibraryScreen:onHold(_, ges)
+function LibraryScreen:onHold(_arg, ges)
     local card = self:cardAt(ges.pos)
     if card then
         -- Multi-selection comes next; until then hold behaves like tap.
@@ -486,7 +486,7 @@ end
 
 function LibraryScreen:updateDownloadedBadges()
     local changed = {}
-    for _, card in ipairs(self.cards or {}) do
+    for _i, card in ipairs(self.cards or {}) do
         local downloaded = self.plugin:downloadedPath(card.book) ~= nil
         if downloaded ~= card.downloaded then
             card:setDownloaded(downloaded)
@@ -572,7 +572,7 @@ function LibraryScreen:showSort()
         self.plugin:saveSettings()
         self:applyQuery{ sort = field, order = order }
     end
-    for _, s in ipairs(SORT_FIELDS) do
+    for _i, s in ipairs(SORT_FIELDS) do
         local current = self.query.sort == s.field
         table.insert(buttons, {{
             text = SORT_LABELS[s.field] .. (current and "  \u{2713}" or ""),

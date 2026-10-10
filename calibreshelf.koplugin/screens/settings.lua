@@ -225,7 +225,7 @@ function SettingsScreen:chooseLibrary()
         local server = self.plugin.server
         local dialog
         local buttons = {}
-        for _, lib in ipairs(self.libraries) do
+        for _i, lib in ipairs(self.libraries) do
             table.insert(buttons, {{
                 text = lib.name .. (lib.id == server.library_id and "  ✓" or ""),
                 callback = function()
@@ -267,7 +267,7 @@ end
 function SettingsScreen:editFormats()
     local plugin = self.plugin
     local enabled, items, seen = {}, {}, {}
-    for _, f in ipairs(plugin.formats) do enabled[f] = true end
+    for _i, f in ipairs(plugin.formats) do enabled[f] = true end
     local order = plugin.settings:readSetting("format_order") or {}
     local function add(f)
         if seen[f] then return end
@@ -279,16 +279,16 @@ function SettingsScreen:editFormats()
             callback = function() enabled[f] = not enabled[f] end,
         })
     end
-    for _, f in ipairs(plugin.formats) do add(f) end
-    for _, f in ipairs(order) do add(f) end
-    for _, f in ipairs(KNOWN_FORMATS) do add(f) end
+    for _i, f in ipairs(plugin.formats) do add(f) end
+    for _i, f in ipairs(order) do add(f) end
+    for _i, f in ipairs(KNOWN_FORMATS) do add(f) end
 
     UIManager:show(SortWidget:new{
         title = _("Preferred formats (top first)"),
         item_table = items,
         callback = function()
             local formats, full = {}, {}
-            for _, it in ipairs(items) do
+            for _i, it in ipairs(items) do
                 table.insert(full, it.fmt)
                 if enabled[it.fmt] then table.insert(formats, it.fmt) end
             end

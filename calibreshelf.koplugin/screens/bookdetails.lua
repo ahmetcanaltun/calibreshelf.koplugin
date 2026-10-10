@@ -55,7 +55,7 @@ function BookDetails:init()
     end
     self.plugin.downloader:addListener(self.listener)
     -- Resume showing progress if this book is already in the queue.
-    for _, job in ipairs(self.plugin.downloader.jobs) do
+    for _i, job in ipairs(self.plugin.downloader.jobs) do
         if job.book.id == self.book.id and (job.status == "queued" or job.status == "downloading") then
             self.job = job
         end
@@ -138,7 +138,7 @@ function BookDetails:buildInfo()
         }, Common.S.gap)
     end
     add(TextWidget:new{ text = _("Formats"):upper(), face = F.small_bold, fgcolor = Common.GRAY }, Common.S.gap * 2)
-    for _, fmt in ipairs(book.formats) do
+    for _i, fmt in ipairs(book.formats) do
         local label = fmt
         local size = friendlySize(book.format_sizes[fmt])
         if size then label = label .. "  " .. size end
@@ -317,7 +317,7 @@ end
 function BookDetails:chooseFormat()
     local dialog
     local buttons = {}
-    for _, fmt in ipairs(self.book.formats) do
+    for _i, fmt in ipairs(self.book.formats) do
         local size = friendlySize(self.book.format_sizes[fmt])
         local label = fmt .. (size and ("  " .. size) or "")
         if self:downloadedPath(fmt) then label = label .. "  · " .. _("on device") end
@@ -363,7 +363,7 @@ function BookDetails:queue(fmt, replace_path)
     local plugin = self.plugin
     self.job = plugin:downloadBook(self.book, fmt, {
         replace_path = replace_path,
-        on_conflict = function(_, final, resolve)
+        on_conflict = function(_arg, final, resolve)
             local dialog
             dialog = ButtonDialog:new{
                 title = T(_("A file named %1 already exists."), final:match("[^/]+$")),

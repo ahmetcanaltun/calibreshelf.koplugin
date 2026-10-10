@@ -70,15 +70,15 @@ end
 
 local function badge(text, inverted)
     return FrameContainer:new{
-        padding = BADGE_PAD,
-        padding_left = BADGE_PAD * 2,
-        padding_right = BADGE_PAD * 2,
+        padding = math.floor(BADGE_PAD / 2),
+        padding_left = BADGE_PAD + math.floor(BADGE_PAD / 2),
+        padding_right = BADGE_PAD + math.floor(BADGE_PAD / 2),
         bordersize = inverted and 0 or Screen:scaleBySize(1.5),
         radius = Screen:scaleBySize(6),
         background = inverted and Blitbuffer.COLOR_BLACK or Blitbuffer.COLOR_WHITE,
         TextWidget:new{
             text = text,
-            face = Common.F.small_bold,
+            face = Common.F.tiny,
             fgcolor = inverted and Blitbuffer.COLOR_WHITE or Blitbuffer.COLOR_BLACK,
             padding = 0,
         },

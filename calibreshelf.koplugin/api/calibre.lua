@@ -99,7 +99,7 @@ local function encodeQuery(query)
     if #keys == 0 then return "" end
     table.sort(keys)
     local parts = {}
-    for _, k in ipairs(keys) do
+    for _i, k in ipairs(keys) do
         table.insert(parts, encodeSegment(k) .. "=" .. encodeSegment(query[k]))
     end
     return "?" .. table.concat(parts, "&")
@@ -247,7 +247,7 @@ local function num(v) return type(v) == "number" and v or nil end
 local function list(v)
     if type(v) ~= "table" then return {} end
     local out = {}
-    for _, x in ipairs(v) do
+    for _i, x in ipairs(v) do
         if type(x) == "string" then table.insert(out, x) end
     end
     return out
@@ -263,7 +263,7 @@ function Calibre.normalizeBook(id, m)
         end
     end
     local formats = {}
-    for _, f in ipairs(list(m.formats)) do table.insert(formats, f:upper()) end
+    for _i, f in ipairs(list(m.formats)) do table.insert(formats, f:upper()) end
     return {
         id = tonumber(id),
         title = str(m.title) or _("Unknown"),
@@ -300,7 +300,7 @@ local function parseBookPage(data, context)
         ids = {},
         books = {},
     }
-    for _, id in ipairs(sr.book_ids) do
+    for _i, id in ipairs(sr.book_ids) do
         id = tonumber(id)
         if id then
             local book = Calibre.normalizeBook(id, data.metadata[tostring(id)])
@@ -377,7 +377,7 @@ function Calibre:newlyAdded(num_books)
     local out = { ids = {}, titles = {}, authors = {} }
     local titles = type(data.titles) == "table" and data.titles or {}
     local authors = type(data.authors) == "table" and data.authors or {}
-    for _, id in ipairs(data.books) do
+    for _i, id in ipairs(data.books) do
         id = tonumber(id)
         if id then
             table.insert(out.ids, id)
@@ -408,7 +408,7 @@ function Calibre:_browseFieldNames(field)
         return nil, err
     end
     local items = {}
-    for _, name in ipairs(data) do
+    for _i, name in ipairs(data) do
         if str(name) then
             table.insert(items, { name = name, search = exactSearch(field, name) })
         end
@@ -440,7 +440,7 @@ function Calibre:browseField(field)
         return nil, makeError(ERR.INCOMPATIBLE, "browse-field: no items")
     end
     local items = {}
-    for _, it in ipairs(data.items) do
+    for _i, it in ipairs(data.items) do
         if type(it) == "table" and str(it.name) and str(it.search) then
             table.insert(items, { name = it.name, count = num(it.count), search = it.search })
         end
