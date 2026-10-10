@@ -1,5 +1,6 @@
 #!/bin/sh
 # Paperwhite 12 geometry: 1236x1648 @ 300 PPI.
+rm -f /tmp/.X1-lock /tmp/.X11-unix/X1  # stale after docker restart
 Xvfb :1 -screen 0 1236x1648x24 -nolisten tcp >/tmp/xvfb.log 2>&1 &
 sleep 1
 # VNC (password "koreader"; published on host loopback only) so a human can drive the emulator.

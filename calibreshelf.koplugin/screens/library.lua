@@ -76,6 +76,7 @@ function LibraryScreen:init()
         tab = "all",
     }
     self.browse_cache = {}
+    self.initial_load = true -- the saved catalog may stand in until the first load succeeds
     self.page = 1
     self.turns = 0
     self.selecting = false
@@ -133,6 +134,7 @@ function LibraryScreen:subtitle()
     if self.message then return _("Not connected") end
     if not self.total then return _("Loading…") end
     local count = self.total == 1 and _("1 book") or T(_("%1 books"), self.total)
+    if self.offline then count = _("Offline") .. " · " .. count end
     return count .. " · " .. (SORT_LABELS[self.query.sort] or self.query.sort)
         .. (self.query.order == "desc" and " ↓" or " ↑")
 end
@@ -410,10 +412,37 @@ end
 ---------------------------------------------------------------------------
 
 --- Make sure ids for `page` are loaded, fetching more from the server if needed.
+function LibraryScreen:loadCached()
+    local data = Store.loadCatalog(self.server_key, self.library_id)
+    if not data then return false end
+    for k, v in pairs(data.query or {}) do self.query[k] = v end
+    self.total = data.total or #data.ids
+    self.ids, self.books = data.ids, data.books
+    self.last_result = nil
+    self.offline = true
+    self.message = nil
+    logger.info("CalibreShelf: showing saved catalog from", os.date("%Y-%m-%d %H:%M", data.saved or 0))
+    return true
+end
+
+function LibraryScreen:saveCatalog()
+    local ok, err = pcall(Store.saveCatalog, self.server_key, self.library_id, {
+        query = self.query, total = self.total, ids = self.ids, books = self.books,
+    })
+    if not ok then logger.warn("CalibreShelf: could not save catalog", err) end
+end
+
 function LibraryScreen:ensureLoaded(page, callback)
     local need = page * self.per_page
     if self.total then need = math.min(need, self.total) end
     if self.total and #self.ids >= need then
+        return callback(true)
+    end
+    if self.offline then
+        return callback(false, { message = _("Connect to Wi-Fi to load more books.") })
+    end
+    if self.initial_load and #self.ids == 0 and not NetworkMgr:isConnected() and self:loadCached() then
+        self.initial_load = false
         return callback(true)
     end
     NetworkMgr:runWhenConnected(function()
@@ -444,8 +473,16 @@ function LibraryScreen:ensureLoaded(page, callback)
         end
         if err then
             logger.warn("CalibreShelf: load failed", err.kind, err.detail)
+            local network = err.kind == Calibre.ERR.UNREACHABLE or err.kind == Calibre.ERR.TIMEOUT
+            if network and self.initial_load and #self.ids == 0 and self:loadCached() then
+                self.initial_load = false
+                Notification:notify(_("Server not reachable. Showing saved books."), Notification.SOURCE_ALWAYS_SHOW)
+                return callback(true)
+            end
             return callback(false, err)
         end
+        self.initial_load = false
+        self:saveCatalog()
         callback(true)
     end)
 end
@@ -474,6 +511,7 @@ end
 
 function LibraryScreen:refresh()
     self.browse_cache = {}
+    self.offline = false
     self.cover_gen = (self.cover_gen or 0) + 1
     self:resetData()
     self.page = 1
@@ -779,14 +817,15 @@ function LibraryScreen:applyQuery(changes)
     local previous = {}
     for k, v in pairs(self.query) do previous[k] = v end
     for k, v in pairs(changes) do self.query[k] = v end
-    local old_ids, old_books, old_total, old_last, old_page =
-        self.ids, self.books, self.total, self.last_result, self.page
+    local old_ids, old_books, old_total, old_last, old_page, old_offline =
+        self.ids, self.books, self.total, self.last_result, self.page, self.offline
     self:resetData()
+    self.offline = false
     self:ensureLoaded(1, function(ok, err)
         if not ok then
             self.query = previous
-            self.ids, self.books, self.total, self.last_result, self.page =
-                old_ids, old_books, old_total, old_last, old_page
+            self.ids, self.books, self.total, self.last_result, self.page, self.offline =
+                old_ids, old_books, old_total, old_last, old_page, old_offline
             UIManager:show(InfoMessage:new{ text = err.message })
             return
         end
@@ -904,6 +943,12 @@ function LibraryScreen:showMenu()
             self:showSort()
         end }},
     }
+    if self.offline then
+        table.insert(buttons, 1, {{ text = _("Go online"), callback = function()
+            UIManager:close(dialog)
+            NetworkMgr:runWhenConnected(function() self:refresh() end)
+        end }})
+    end
     if self.query.search ~= "" then
         table.insert(buttons, 1, {{ text = _("Show all books"), callback = function()
             UIManager:close(dialog)

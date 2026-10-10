@@ -10,6 +10,7 @@ Only sized thumbnails are cached; full-size covers never are.
 ]]
 
 local DataStorage = require("datastorage")
+local LuaSettings = require("luasettings")
 local bit = require("bit")
 local lfs = require("libs/libkoreader-lfs")
 local logger = require("logger")
@@ -17,6 +18,8 @@ local util = require("util")
 
 local Store = {
     MAX_THUMBS = 800, -- ~20-30 MB of small JPEGs
+    MAX_CATALOG_BOOKS = 240,
+    MAX_COMMENTS = 3000,
 }
 
 Store.root = DataStorage:getDataDir() .. "/cache/calibreshelf"
@@ -67,6 +70,46 @@ function Store.writeFile(path, data)
         return false
     end
     return os.rename(tmp, path)
+end
+
+local function catalogPath(server_key, library_id)
+    return ensureDir(Store.root) .. "/catalog-" .. Store.hash(server_key) .. "-" .. Store.hash(library_id) .. ".lua"
+end
+
+--- Save the last viewed listing so it can be browsed offline.
+-- listing = { query = {...}, total = n, ids = {...}, books = {[id] = book} }
+function Store.saveCatalog(server_key, library_id, listing)
+    local ids, books = {}, {}
+    for i = 1, math.min(#listing.ids, Store.MAX_CATALOG_BOOKS) do
+        local id = listing.ids[i]
+        local book = listing.books[id]
+        if book then
+            local copy = {}
+            for k, v in pairs(book) do copy[k] = v end
+            if copy.comments and #copy.comments > Store.MAX_COMMENTS then
+                copy.comments = copy.comments:sub(1, Store.MAX_COMMENTS) .. "…"
+            end
+            table.insert(ids, id)
+            books[id] = copy
+        end
+    end
+    local settings = LuaSettings:open(catalogPath(server_key, library_id))
+    settings:reset{
+        query = listing.query,
+        total = listing.total,
+        ids = ids,
+        books = books,
+        saved = os.time(),
+    }
+    settings:flush()
+end
+
+function Store.loadCatalog(server_key, library_id)
+    local path = catalogPath(server_key, library_id)
+    if not lfs.attributes(path) then return nil end
+    local data = LuaSettings:open(path).data
+    if type(data) ~= "table" or type(data.ids) ~= "table" or #data.ids == 0 then return nil end
+    return data
 end
 
 --- Delete oldest thumbnails beyond MAX_THUMBS (cheap: one directory scan).
