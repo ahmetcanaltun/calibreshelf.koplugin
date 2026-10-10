@@ -1,0 +1,4 @@
+tests/.rocks/
+tests/emulator/out/
+tests/emulator/cache/
+.DS_Store

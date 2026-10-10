@@ -1,0 +1,118 @@
+--[[--
+Local storage: cache directories and the on-disk thumbnail cache.
+
+Layout (under KOReader's data dir):
+    cache/calibreshelf/thumbs/<server-hash>/<lib-hash>_<id>_<w>x<h>_<mtime-hash>.jpg
+
+Only sized thumbnails are cached; full-size covers never are.
+
+@module calibreshelf.lib.store
+]]
+
+local DataStorage = require("datastorage")
+local bit = require("bit")
+local lfs = require("libs/libkoreader-lfs")
+local logger = require("logger")
+local util = require("util")
+
+local Store = {
+    MAX_THUMBS = 800, -- ~20-30 MB of small JPEGs
+}
+
+Store.root = DataStorage:getDataDir() .. "/cache/calibreshelf"
+
+--- Short stable hash (djb2, hex) for building file names from URLs/ids.
+function Store.hash(s)
+    local h = 5381
+    s = tostring(s or "")
+    for i = 1, #s do
+        h = bit.band(bit.lshift(h, 5) + h + s:byte(i), 0x7fffffff)
+    end
+    return string.format("%08x", h)
+end
+
+local function ensureDir(path)
+    if not util.directoryExists(path) then
+        util.makePath(path)
+    end
+    return path
+end
+
+function Store.thumbDir(server_key)
+    return ensureDir(Store.root .. "/thumbs/" .. Store.hash(server_key))
+end
+
+function Store.thumbPath(server_key, library_id, book, w, h)
+    return string.format("%s/%s_%d_%dx%d_%s.jpg", Store.thumbDir(server_key),
+        Store.hash(library_id), book.id, w, h, Store.hash(book.last_modified))
+end
+
+function Store.readFile(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local data = f:read("*a")
+    f:close()
+    return data
+end
+
+--- Write atomically: tmp file then rename.
+function Store.writeFile(path, data)
+    local tmp = path .. ".tmp"
+    local f = io.open(tmp, "wb")
+    if not f then return false end
+    local ok = f:write(data)
+    f:close()
+    if not ok then
+        os.remove(tmp)
+        return false
+    end
+    return os.rename(tmp, path)
+end
+
+--- Delete oldest thumbnails beyond MAX_THUMBS (cheap: one directory scan).
+function Store.pruneThumbs()
+    local base = Store.root .. "/thumbs"
+    if not util.directoryExists(base) then return end
+    local files = {}
+    for server in lfs.dir(base) do
+        if server ~= "." and server ~= ".." then
+            local dir = base .. "/" .. server
+            if lfs.attributes(dir, "mode") == "directory" then
+                for name in lfs.dir(dir) do
+                    local p = dir .. "/" .. name
+                    if name:match("%.jpg$") then
+                        table.insert(files, { path = p, t = lfs.attributes(p, "access") or 0 })
+                    end
+                end
+            end
+        end
+    end
+    if #files <= Store.MAX_THUMBS then return end
+    table.sort(files, function(a, b) return a.t < b.t end)
+    for i = 1, #files - Store.MAX_THUMBS do
+        os.remove(files[i].path)
+    end
+    logger.info("CalibreShelf: pruned", #files - Store.MAX_THUMBS, "thumbnails")
+end
+
+local function removeTree(path)
+    if lfs.attributes(path, "mode") ~= "directory" then
+        os.remove(path)
+        return
+    end
+    for name in lfs.dir(path) do
+        if name ~= "." and name ~= ".." then
+            removeTree(path .. "/" .. name)
+        end
+    end
+    lfs.rmdir(path)
+end
+
+--- "Clear CalibreShelf cache": thumbnails and cached catalog metadata.
+-- The downloaded-books map lives in settings and is NOT touched.
+function Store.clearCache()
+    removeTree(Store.root)
+    logger.info("CalibreShelf: cache cleared")
+end
+
+return Store
