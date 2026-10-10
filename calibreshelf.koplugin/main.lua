@@ -154,6 +154,11 @@ function CalibreShelf:showLibrary()
     UIManager:show(self.library_screen)
 end
 
+function CalibreShelf:showDownloads()
+    local DownloadsScreen = csrequire("screens/downloads")
+    UIManager:show(DownloadsScreen:new{ plugin = self })
+end
+
 function CalibreShelf:showSettings()
     local SettingsScreen = csrequire("screens/settings")
     UIManager:show(SettingsScreen:new{ plugin = self })
@@ -162,7 +167,7 @@ end
 --- Open a local file in KOReader (used by "Open" / "Open now").
 function CalibreShelf:openFile(path)
     if self.library_screen then
-        self.library_screen:onClose()
+        self.library_screen:onClose(true)
     end
     logger.info("CalibreShelf: opening", path)
     if self.ui.document then

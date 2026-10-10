@@ -25,6 +25,8 @@ local HorizontalSpan = require("ui/widget/horizontalspan")
 local IconButton = require("ui/widget/iconbutton")
 local InfoMessage = require("ui/widget/infomessage")
 local InputDialog = require("ui/widget/inputdialog")
+local LeftContainer = require("ui/widget/container/leftcontainer")
+local Notification = require("ui/widget/notification")
 local NetworkMgr = require("ui/network/manager")
 local OverlapGroup = require("ui/widget/overlapgroup")
 local RenderImage = require("ui/renderimage")
@@ -43,6 +45,7 @@ local csrequire = require("calibreshelf/require")
 local BookCard = csrequire("widgets/bookcard")
 local Calibre = csrequire("api/calibre")
 local Common = csrequire("widgets/common")
+local Downloads = csrequire("lib/downloads")
 local Store = csrequire("lib/store")
 
 local FULL_REFRESH_EVERY = 6
@@ -71,7 +74,12 @@ function LibraryScreen:init()
     }
     self.page = 1
     self.turns = 0
+    self.selecting = false
+    self.selected = {}
+    self.selected_count = 0
     self:resetData()
+    self.listener = function(job) self:onJobUpdate(job) end
+    self.plugin.downloader:addListener(self.listener)
     self:computeLayout()
     self.ges_events.Tap = { GestureRange:new{ ges = "tap", range = self.dimen } }
     self.ges_events.Hold = { GestureRange:new{ ges = "hold", range = self.dimen } }
@@ -126,6 +134,17 @@ function LibraryScreen:subtitle()
 end
 
 function LibraryScreen:buildHeader()
+    if self.selecting then
+        return Common.header{
+            width = self.dimen.w,
+            title = self.selected_count == 1 and _("1 selected") or T(_("%1 selected"), self.selected_count),
+            subtitle = _("Tap books to select or deselect"),
+            show_parent = self,
+            actions = {
+                { icon = "close", callback = function() self:exitSelection() end, allow_flash = false },
+            },
+        }
+    end
     return Common.header{
         width = self.dimen.w,
         title = self.query.title,
@@ -144,7 +163,43 @@ function LibraryScreen:totalPages()
     return math.ceil(self.total / self.per_page)
 end
 
+function LibraryScreen:buildSelectionBar()
+    local S = Common.S
+    local W = self.dimen.w - 2 * S.margin
+    local n = self.selected_count
+    local function button(text, callback, primary, width, enabled)
+        return Button:new{
+            text = text,
+            width = width,
+            height = S.footer_h - S.gap,
+            text_font_size = 20,
+            bordersize = primary and Screen:scaleBySize(2) or 0,
+            background = (not primary) and Common.LIGHT or nil,
+            radius = Screen:scaleBySize(10),
+            padding_v = 0,
+            enabled = enabled ~= false,
+            callback = callback,
+            show_parent = self,
+        }
+    end
+    local small = math.floor((W - 2 * S.gap) * 0.27)
+    local big = W - 2 * S.gap - 2 * small
+    return VerticalGroup:new{
+        VerticalSpan:new{ width = S.gap },
+        HorizontalGroup:new{
+            HorizontalSpan:new{ width = S.margin },
+            button(_("Select page"), function() self:selectPage() end, false, small),
+            HorizontalSpan:new{ width = S.gap },
+            button(_("Clear"), function() self:clearSelection() end, false, small, n > 0),
+            HorizontalSpan:new{ width = S.gap },
+            button(n == 1 and _("Download 1 book") or T(_("Download %1 books"), n),
+                function() self:downloadSelected() end, true, big, n > 0),
+        },
+    }
+end
+
 function LibraryScreen:buildFooter()
+    if self.selecting then return self:buildSelectionBar() end
     local S = Common.S
     local W = self.dimen.w
     local pages = self:totalPages()
@@ -232,6 +287,7 @@ function LibraryScreen:buildGrid()
                 local card = BookCard:new{
                     book = book,
                     downloaded = self.plugin:downloadedPath(book) ~= nil,
+                    selected = self.selected[id] == true,
                     width = self.cell_w,
                     cover_w = self.cover_w,
                     cover_h = self.cover_h,
@@ -265,14 +321,32 @@ function LibraryScreen:buildGrid()
 end
 
 function LibraryScreen:build()
-    local content = VerticalGroup:new{
-        align = "left",
+    local W = self.dimen.w
+    self.header_holder = LeftContainer:new{
+        dimen = Geom:new{ w = W, h = self.header_h },
         self:buildHeader(),
-        self:buildGrid(),
+    }
+    self.footer_holder = LeftContainer:new{
+        dimen = Geom:new{ w = W, h = self.footer_h },
         self:buildFooter(),
     }
-    -- Free old widget tree, but cards were already freed/rebuilt by buildGrid.
-    self[1] = self:wrap(content)
+    self[1] = self:wrap(VerticalGroup:new{
+        align = "left",
+        self.header_holder,
+        self:buildGrid(),
+        self.footer_holder,
+    })
+end
+
+-- Rebuild header and footer only, refreshing just those strips.
+function LibraryScreen:updateChrome()
+    local W, H = self.dimen.w, self.dimen.h
+    self.header_holder[1]:free()
+    self.header_holder[1] = self:buildHeader()
+    self.footer_holder[1]:free()
+    self.footer_holder[1] = self:buildFooter()
+    UIManager:setDirty(self, "ui", Geom:new{ x = 0, y = 0, w = W, h = self.header_h })
+    UIManager:setDirty(self, "ui", Geom:new{ x = 0, y = H - self.footer_h, w = W, h = self.footer_h })
 end
 
 --- Repaint the whole screen; "partial" normally, "full" every few turns.
@@ -459,18 +533,158 @@ end
 
 function LibraryScreen:onTap(_arg, ges)
     local card = self:cardAt(ges.pos)
-    if card then
+    if not card then return end
+    if self.selecting then
+        self:toggle(card)
+    else
         self:openBook(card.book)
-        return true
     end
+    return true
 end
 
 function LibraryScreen:onHold(_arg, ges)
     local card = self:cardAt(ges.pos)
-    if card then
-        -- Multi-selection comes next; until then hold behaves like tap.
-        self:openBook(card.book)
-        return true
+    if not card then return end
+    if not self.selecting then
+        self.selecting = true
+    end
+    self:toggle(card)
+    return true
+end
+
+---------------------------------------------------------------------------
+-- Multi-selection
+---------------------------------------------------------------------------
+
+function LibraryScreen:setSelected(id, on)
+    if (self.selected[id] == true) == on then return end
+    self.selected[id] = on or nil
+    self.selected_count = self.selected_count + (on and 1 or -1)
+end
+
+function LibraryScreen:toggle(card)
+    local id = card.book.id
+    local on = not self.selected[id]
+    self:setSelected(id, on)
+    card:setSelected(on)
+    self:refreshCards({ card })
+    self:updateChrome()
+end
+
+function LibraryScreen:selectPage()
+    local changed = {}
+    for _i, card in ipairs(self.cards) do
+        if not self.selected[card.book.id] then
+            self:setSelected(card.book.id, true)
+            card:setSelected(true)
+            table.insert(changed, card)
+        end
+    end
+    self:refreshCards(changed)
+    self:updateChrome()
+end
+
+function LibraryScreen:clearSelection()
+    self.selected = {}
+    self.selected_count = 0
+    local changed = {}
+    for _i, card in ipairs(self.cards) do
+        if card.selected then
+            card:setSelected(false)
+            table.insert(changed, card)
+        end
+    end
+    self:refreshCards(changed)
+    self:updateChrome()
+end
+
+function LibraryScreen:exitSelection()
+    self.selecting = false
+    self:clearSelection()
+end
+
+function LibraryScreen:downloadSelected()
+    local plugin = self.plugin
+    local server_key = self.server_key
+    local fresh, existing, unsupported = {}, {}, 0
+    -- Keep the on-screen order for the queue.
+    for _i, id in ipairs(self.ids) do
+        if self.selected[id] then
+            local book = self.books[id]
+            local fmt = Downloads.pickFormat(book, plugin.formats)
+            if not fmt then
+                unsupported = unsupported + 1
+            else
+                local path = plugin.downloads:get(server_key, self.library_id, id, fmt)
+                table.insert(path and existing or fresh, { book = book, fmt = fmt, path = path })
+            end
+        end
+    end
+
+    local function queue(items, replace)
+        for _i, it in ipairs(items) do
+            plugin:downloadBook(it.book, it.fmt, { replace_path = replace and it.path or nil })
+        end
+        local n = #items
+        self:exitSelection()
+        if n > 0 then
+            self.batch_size = (self.batch_size or 0) + n
+            local text = n == 1 and _("1 book added to downloads") or T(_("%1 books added to downloads"), n)
+            if unsupported > 0 then
+                text = text .. "\n" .. T(_("%1 skipped: no readable format"), unsupported)
+            end
+            Notification:notify(text, Notification.SOURCE_ALWAYS_SHOW)
+        elseif unsupported > 0 then
+            UIManager:show(InfoMessage:new{ text = _("None of the selected books has a format KOReader can open.") })
+        end
+    end
+
+    if #existing == 0 then
+        return queue(fresh)
+    end
+    local dialog
+    local buttons = {}
+    if #fresh > 0 then
+        table.insert(buttons, {{ text = T(_("Skip them, download %1"), #fresh), callback = function()
+            UIManager:close(dialog)
+            queue(fresh)
+        end }})
+    end
+    table.insert(buttons, {{ text = _("Replace them"), callback = function()
+        UIManager:close(dialog)
+        local all = {}
+        for _i, it in ipairs(fresh) do table.insert(all, it) end
+        for _i, it in ipairs(existing) do table.insert(all, it) end
+        queue(all, true)
+    end }})
+    table.insert(buttons, {{ text = _("Cancel"), callback = function() UIManager:close(dialog) end }})
+    dialog = ButtonDialog:new{
+        title = #existing == 1 and _("1 selected book is already on this device.")
+            or T(_("%1 selected books are already on this device."), #existing),
+        buttons = buttons,
+    }
+    UIManager:show(dialog)
+end
+
+function LibraryScreen:onJobUpdate(job)
+    if job.status == "completed" then
+        for _i, card in ipairs(self.cards or {}) do
+            if card.book.id == job.book.id and not card.downloaded then
+                card:setDownloaded(true)
+                self:refreshCards({ card })
+            end
+        end
+    end
+    if (self.batch_size or 0) > 1 and self.plugin.downloader:pending() == 0
+            and job.status ~= "queued" and job.status ~= "downloading" then
+        local failed = 0
+        for _i, j in ipairs(self.plugin.downloader.jobs) do
+            if j.status == "failed" then failed = failed + 1 end
+        end
+        local text = failed == 0 and _("All downloads finished")
+            or T(_("Downloads finished, %1 failed"), failed)
+        Notification:notify(text, Notification.SOURCE_ALWAYS_SHOW)
+        self.batch_size = 0
     end
 end
 
@@ -601,6 +815,17 @@ function LibraryScreen:showMenu()
             self:applyQuery{ search = "", title = self.plugin.server.library_name or _("Library") }
         end }})
     end
+    local pending = self.plugin.downloader:pending()
+    table.insert(buttons, {{ text = pending > 0 and T(_("Downloads (%1)"), pending) or _("Downloads"),
+        callback = function()
+            UIManager:close(dialog)
+            self.plugin:showDownloads()
+        end }})
+    table.insert(buttons, {{ text = _("Select books"), callback = function()
+        UIManager:close(dialog)
+        self.selecting = true
+        self:updateChrome()
+    end }})
     table.insert(buttons, {{ text = _("Refresh"), callback = function()
         UIManager:close(dialog)
         self:refresh()
@@ -614,7 +839,11 @@ function LibraryScreen:showMenu()
     UIManager:show(dialog)
 end
 
-function LibraryScreen:onClose()
+function LibraryScreen:onClose(force)
+    if self.selecting and not force then
+        self:exitSelection()
+        return true
+    end
     self.closed = true
     self.cover_gen = (self.cover_gen or 0) + 1
     UIManager:close(self, "full")
@@ -623,6 +852,7 @@ function LibraryScreen:onClose()
 end
 
 function LibraryScreen:onCloseWidget()
+    self.plugin.downloader:removeListener(self.listener)
     self:freeCards()
     UIManager:scheduleIn(5, Store.pruneThumbs)
 end

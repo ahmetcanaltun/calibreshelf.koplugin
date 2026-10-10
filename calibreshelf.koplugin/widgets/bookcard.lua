@@ -118,24 +118,32 @@ function BookCard:buildCover()
         }
     end
 
+    -- Markers follow the visible image, which is bottom-centered in the box.
+    local img = { x = 0, y = 0, w = box.w, h = box.h }
+    if self.cover_bb then
+        img.w, img.h = self.cover_bb:getWidth(), self.cover_bb:getHeight()
+        img.x, img.y = math.floor((box.w - img.w) / 2), box.h - img.h
+    end
     local layers = OverlapGroup:new{ dimen = box:copy(), cover }
     if self.selected then
-        table.insert(layers, FrameContainer:new{
-            width = box.w,
-            height = box.h,
+        local frame = FrameContainer:new{
+            width = img.w,
+            height = img.h,
             padding = 0,
             bordersize = SELECT_BORDER,
             color = Blitbuffer.COLOR_BLACK,
             VerticalSpan:new{ width = 0 },
-        })
+        }
+        frame.overlap_offset = { img.x, img.y }
+        table.insert(layers, frame)
         local b = badge("\u{2713}", true)
-        b.overlap_offset = { SELECT_BORDER * 2, SELECT_BORDER * 2 }
+        b.overlap_offset = { img.x + SELECT_BORDER * 2, img.y + SELECT_BORDER * 2 }
         table.insert(layers, b)
     end
     if self.downloaded then
         local b = badge(_("On device"), false)
         local bs = b:getSize()
-        b.overlap_offset = { box.w - bs.w - SELECT_BORDER * 2, box.h - bs.h - SELECT_BORDER * 2 }
+        b.overlap_offset = { img.x + img.w - bs.w - SELECT_BORDER * 2, img.y + img.h - bs.h - SELECT_BORDER * 2 }
         table.insert(layers, b)
     end
     return layers

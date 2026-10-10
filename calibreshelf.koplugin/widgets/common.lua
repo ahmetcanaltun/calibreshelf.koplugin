@@ -233,6 +233,10 @@ function Page:onSwipe(_arg, ges)
     end
 end
 
+function Page:onShow()
+    UIManager:setDirty(self, "partial")
+end
+
 function Page:onClose()
     UIManager:close(self)
     if self.close_callback then self.close_callback() end
