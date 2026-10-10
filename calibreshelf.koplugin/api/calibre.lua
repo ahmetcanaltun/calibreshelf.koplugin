@@ -534,6 +534,11 @@ function Calibre:downloadFormat(book_id, fmt, dest_path)
     if write_failed then
         return nil, makeError(ERR.DISK, "write " .. dest_path .. ": " .. tostring(write_failed))
     end
+    if type(code) ~= "number" and classifySocketError(code) == ERR.UNREACHABLE and body ~= "" then
+        -- Connection dropped after data started arriving.
+        return nil, makeError(ERR.UNREACHABLE, "GET " .. path .. " -> " .. tostring(code),
+            _("The download was interrupted. Check Wi-Fi and try again."))
+    end
     if code == 404 and body:find("No ", 1, true) and body:find("format", 1, true) then
         return nil, makeError(ERR.NOT_FOUND, path .. " " .. body,
             _("This format is no longer available for the book."))
