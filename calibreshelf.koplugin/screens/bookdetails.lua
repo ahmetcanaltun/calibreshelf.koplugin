@@ -421,9 +421,10 @@ function BookDetails:loadCover()
     if not data or self.closed then return end
     local ok, bb = pcall(RenderImage.renderImageData, RenderImage, data, #data, false)
     if not ok or not bb then return end
+    -- Fit the box both ways: calibre never upscales small original covers.
     local bw, bh = bb:getWidth(), bb:getHeight()
-    if bw > self.cover_w or bh > self.cover_h then
-        local f = math.min(self.cover_w / bw, self.cover_h / bh)
+    local f = math.min(self.cover_w / bw, self.cover_h / bh)
+    if math.abs(f - 1) > 0.02 then
         bb = RenderImage:scaleBlitBuffer(bb, math.floor(bw * f), math.floor(bh * f), true)
     end
     self.cover_bb = bb
