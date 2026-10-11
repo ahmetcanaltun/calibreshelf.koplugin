@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start the KOReader emulator with CalibreShelf (+ ZenOS if ZENOS_DIR is set).
-# Usage: CS_AUTOOPEN=library CS_SERVER=http://host.docker.internal:8091 tests/emulator/start.sh
+# Usage: CS_AUTOOPEN=library CS_SERVER=http://host.docker.internal:8091 [CS_LIBRARY=id CS_LIBRARY_NAME=name] tests/emulator/start.sh
 #        tests/emulator/shot.sh name    -> tests/emulator/out/name.png
 #        tests/emulator/tap.sh X Y      -> tap at device pixel coordinates
 set -euo pipefail
@@ -20,7 +20,7 @@ rm -f "$HERE/$TARBALL"
 SETTINGS="$HERE/out/calibreshelf.lua"
 cat > "$SETTINGS" <<LUA
 return {
-    ["server"] = { ["url"] = "${CS_SERVER:-http://host.docker.internal:8091}", ["library_id"] = "lib1", ["library_name"] = "lib1" },
+    ["server"] = { ["url"] = "${CS_SERVER:-http://host.docker.internal:8091}", ["library_id"] = "${CS_LIBRARY:-lib1}", ["library_name"] = "${CS_LIBRARY_NAME:-${CS_LIBRARY:-lib1}}" },
 }
 LUA
 
