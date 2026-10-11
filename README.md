@@ -7,6 +7,12 @@ built for e-ink. Developed on a Kindle Paperwhite (12th gen).
 It talks to the same server the Calibre web interface uses, so it is neither
 Wireless Device mode nor an OPDS browser.
 
+| Library | Book page |
+|---|---|
+| ![Library](docs/screenshots/library.png) | ![Book page](docs/screenshots/details.png) |
+| **Selecting books** | **Downloads** |
+| ![Selection](docs/screenshots/selection.png) | ![Downloads](docs/screenshots/downloads.png) |
+
 - Cover grid of the whole library, paged, with lazy thumbnail loading
 - Search with Calibre's own search syntax, sort by date added, title, author or series
 - Browse by author, series or tag, or just the recently added books
