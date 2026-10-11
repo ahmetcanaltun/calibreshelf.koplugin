@@ -69,3 +69,7 @@ tests/run_api_tests.sh                   # API tests against a real calibre-serv
 `tests/emulator/` runs the official KOReader Linux build headless in Docker at
 Paperwhite resolution, with VNC on `localhost:5900`. See `start.sh` there.
 Notes on the Calibre routes in use are in `docs/calibre-api.md`.
+
+## License
+
+AGPL-3.0, the same as KOReader. See [LICENSE](LICENSE).
